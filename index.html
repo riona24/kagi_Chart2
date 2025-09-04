@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>日経225先物 手動入力カギ足（自動同期・共有リンク・CDN不要）</title>
+<title>日経225先物 手動入力カギ足（自動同期・共有リンク）</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans JP",sans-serif;background:linear-gradient(135deg,#1e3c72,#2a5298);min-height:100vh;padding:20px}
@@ -44,7 +44,7 @@ canvas{display:block;width:100%;height:380px}
 </head>
 <body>
 <div class="container">
-  <div class="header"><h1>📈 日経225先物 手動入力カギ足（自動同期・共有リンク・CDN不要）</h1></div>
+  <div class="header"><h1>📈 日経225先物 手動入力カギ足（自動同期・共有リンク）</h1></div>
   <div class="main">
 
     <!-- 左パネル -->
@@ -67,9 +67,9 @@ canvas{display:block;width:100%;height:380px}
         <input id="reversalPercent" type="number" class="input" value="0.1" step="0.01" min="0.01" />
         <div class="row" style="margin-top:8px">
           <button id="recalculateBtn" class="btn btn-amber small">🔄 再計算</button>
-          <button id="shareLinkBtn" class="btn btn-dark small">🔗 共有リンクを作成</button>
+          <button id="shareLinkBtn" class="btn btn-dark small">🔗 共有リンク</button>
         </div>
-        <div class="section-note">共有リンク：開いた端末にデータが自動インポートされます。</div>
+        <div class="section-note">共有リンクを開くと、リンクに埋め込まれたデータが自動インポートされます。</div>
       </div>
 
       <div class="card">
@@ -116,12 +116,18 @@ canvas{display:block;width:100%;height:380px}
         </div>
       </div>
 
+      <!-- ★ これが無くてJSが落ちていました -->
+      <div class="card">
+        <h2>入力履歴</h2>
+        <div class="list" id="priceList"><div class="item" style="justify-content:center;color:#7f8c8d">履歴がありません</div></div>
+      </div>
+
       <div class="card">
         <h2>☁️ クラウド同期（GitHub Gist） <span class="badge" id="syncStatus">待機中</span></h2>
         <div class="flex-col">
           <div>
             <label>パーソナルアクセストークン（classic / scope: <b>gist</b>）</label>
-            <input id="gistToken" type="password" class="input" placeholder="ghp_..." />
+            <input id="gistToken" type="password" class="input" placeholder="ghp_... または github_pat_..." />
             <div class="row" style="margin-top:6px">
               <button id="saveTokenBtn" class="btn btn-green small">🔐 トークン保存</button>
               <button id="clearTokenBtn" class="btn btn-gray small">🚫 トークン削除</button>
@@ -149,8 +155,7 @@ canvas{display:block;width:100%;height:380px}
         <div class="box"><div class="v" id="kagiCount">0</div><div class="l">カギ線数</div></div>
       </div>
 
-      <div class="card info">📌 まずは「📊 サンプルデータ」→ 右にグラフ。  
-      自動同期ONにすると、PCで編集→自動保存→スマホが自動反映します。</div>
+      <div class="card info">📌 まずは「📊 サンプルデータ」。自動同期ONで、PC保存→スマホ自動反映。</div>
     </div>
 
     <!-- 右パネル -->
@@ -464,21 +469,17 @@ function loadSyncPrefs(){
 }
 function saveToken(){ localStorage.setItem(SYNC_KEYS.token, el.gistToken.value.trim()); log('トークンを保存しました'); }
 function clearToken(){ localStorage.removeItem(SYNC_KEYS.token); el.gistToken.value=''; log('トークンを削除しました'); }
-
-// ★ここが重要：PAT classic / fine-grained どちらでも通るようにする
+// ★PAT classic / fine-grained どちらでも通る
 async function gistRequest(path, method='GET', body=null, useTokenOptional=false){
   const headers={ 'Accept':'application/vnd.github+json' };
   const token=(el.gistToken.value||'').trim();
-  if (token) {
-    headers['Authorization'] = (token.startsWith('github_pat_') ? 'Bearer ' : 'token ') + token;
-  }
+  if (token) headers['Authorization'] = (token.startsWith('github_pat_') ? 'Bearer ' : 'token ') + token;
   if(body) headers['Content-Type']='application/json';
-  if(useTokenOptional && !token) delete headers['Authorization']; // 公開Gist読み込み可
+  if(useTokenOptional && !token) delete headers['Authorization'];
   const res=await fetch('https://api.github.com'+path,{method,headers,body:body?JSON.stringify(body):undefined});
   if(!res.ok){ const t=await res.text(); throw new Error('GitHub API '+res.status+' '+t); }
   return res.json();
 }
-
 async function createGist(){
   const pub=!!el.gistPublic.checked;
   const s=getStateObj();
