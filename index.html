@@ -268,7 +268,55 @@ function drawAxes(minY, maxY){
   ctx.restore();
   return pad;
 }
+// --- ふきだしツールチップ（キャンバス描画） ---
+function roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr);
+  ctx.quadraticCurveTo(x, y, x + rr, y);
+  ctx.closePath();
+}
 
+function drawTooltipAt(x, y, lines) {
+  const W = el.kagiCanvas.clientWidth, H = el.kagiCanvas.clientHeight;
+  const pad = 6, lineH = 16;
+
+  ctx.save();
+  ctx.font = '12px system-ui, sans-serif';
+
+  const textW = Math.max(...lines.map(t => ctx.measureText(t).width));
+  const boxW = Math.ceil(textW + pad * 2);
+  const boxH = Math.ceil(lineH * lines.length + pad * 2);
+
+  // 初期位置：点の右上
+  let bx = x + 12;
+  let by = y - boxH - 12;
+
+  // はみ出し補正
+  if (bx + boxW > W) bx = W - boxW - 6;
+  if (by < 6) by = y + 12;
+
+  // 背景
+  ctx.fillStyle = 'rgba(0,0,0,0.78)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 1;
+  roundRect(ctx, bx, by, boxW, boxH, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  // 文字
+  ctx.fillStyle = '#fff';
+  lines.forEach((t, i) => ctx.fillText(t, bx + pad, by + pad + (i + 0.85) * lineH));
+
+  ctx.restore();
+}
 function drawChart(){
   const W = el.kagiCanvas.clientWidth, H = el.kagiCanvas.clientHeight;
   ctx.clearRect(0,0,W,H);
@@ -332,10 +380,24 @@ function drawChart(){
     hitAreas.trade.push({x,y,r:14,index:i});
   });
 
-  if(selectedIdx!==null && kagiData[selectedIdx]){
-    const p=kagiData[selectedIdx], x=x2px(p.x), y=y2px(p.y);
-    ctx.strokeStyle='#f1c40f'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(x,y,14,0,Math.PI*2); ctx.stroke();
-  }
+  // 選択中のカギ点にハイライト＋ツールチップ
+if (selectedIdx !== null && kagiData[selectedIdx]) {
+  const p = kagiData[selectedIdx];
+  const x = x2px(p.x), y = y2px(p.y);
+
+  // ハイライトリング
+  ctx.strokeStyle = '#f1c40f';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(x, y, 14, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 価格＋時刻のふきだし
+  drawTooltipAt(x, y, [
+    '¥' + p.y.toLocaleString(),
+    new Date(p.timestamp).toLocaleString()
+  ]);
+}
 
   const totalWidth = totalX, width = Math.min(maxViewWidth,totalWidth), maxStart=Math.max(0,totalWidth-width);
   el.chartRange.value = (totalWidth<=maxViewWidth) ? 100 : Math.round((viewStart/maxStart)*100);
