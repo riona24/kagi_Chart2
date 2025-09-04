@@ -472,7 +472,10 @@ function clearToken(){ localStorage.removeItem(SYNC_KEYS.token); el.gistToken.va
 async function gistRequest(path, method='GET', body=null, useTokenOptional=false){
   const headers={ 'Accept':'application/vnd.github+json' };
   const token=el.gistToken.value.trim();
-  if(token) headers['Authorization']='token '+token;
+  if (token) {
+  headers['Authorization'] =
+    (token.startsWith('github_pat_') ? 'Bearer ' : 'token ') + token;
+}
   if(body) headers['Content-Type']='application/json';
   if(useTokenOptional && !token) delete headers['Authorization']; // 公開Gist読み込み用
   const res=await fetch('https://api.github.com'+path,{method,headers,body:body?JSON.stringify(body):undefined});
