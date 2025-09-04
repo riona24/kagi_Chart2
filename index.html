@@ -150,7 +150,7 @@ canvas{display:block;width:100%;height:380px}
       </div>
 
       <div class="card info">📌 まずは「📊 サンプルデータ」→ 右にグラフ。  
-      自動同期ONにすると、**PCで編集→自動保存→スマホが自動反映**します。</div>
+      自動同期ONにすると、PCで編集→自動保存→スマホが自動反映します。</div>
     </div>
 
     <!-- 右パネル -->
@@ -182,7 +182,6 @@ const el = {};
   'autosaveToggle','priceList','tradeList','chartRange','rangeInfo',
   'dataLog','tradeLog','plTotal','dataCount','kagiCount','currentPrice','lastUpdate',
   'kagiCanvas','shareLinkBtn',
-  // Gist
   'gistToken','gistId','gistPublic','autoSync','saveTokenBtn','clearTokenBtn','createGistBtn','saveGistBtn','loadGistBtn','syncStatus'
 ].forEach(id => el[id] = document.getElementById(id));
 
@@ -197,7 +196,7 @@ let clientId = localStorage.getItem('client_id') || (Math.random().toString(36).
 localStorage.setItem('client_id', clientId);
 let lastSyncedAt = 0;
 let pollTimer = null;
-const POLL_MS = 30000; // 読込は30秒おき
+const POLL_MS = 30000;
 
 /* ====== ユーティリティ ====== */
 function log(msg){ const line=document.createElement('div'); line.textContent=new Date().toLocaleTimeString()+' - '+msg; el.dataLog.appendChild(line); el.dataLog.scrollTop=el.dataLog.scrollHeight; if(el.dataLog.children.length>200) el.dataLog.children[0].remove(); }
@@ -209,7 +208,7 @@ function restoreLocal(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!r
 function getStateObj(){ return {priceData,trades,reversalPercent:+el.reversalPercent.value,maxViewWidth,_meta:{updatedAt:Date.now(),clientId,version:1}}; }
 function applyState(s){ priceData=s.priceData||[]; trades=s.trades||[]; if(typeof s.reversalPercent==='number') el.reversalPercent.value=s.reversalPercent; if(typeof s.maxViewWidth==='number') maxViewWidth=s.maxViewWidth; selectedIdx=null; selectedTradeIdx=null; drawAll(); if(s._meta?.updatedAt) lastSyncedAt = s._meta.updatedAt; }
 
-/* ====== Base64（URL共有用） ====== */
+/* ====== Base64共有 ====== */
 function b64encode(str){ const bytes=new TextEncoder().encode(str); let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b)); return btoa(bin); }
 function b64decode(b64){ const bin=atob(b64); const bytes=new Uint8Array([...bin].map(ch=>ch.charCodeAt(0))); return new TextDecoder().decode(bytes); }
 function makeShareLink(){ const url=location.origin+location.pathname+'#data='+b64encode(JSON.stringify(getStateObj())); if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>log('共有リンクをコピーしました')); } else { prompt('このURLをコピーしてください', url); } }
@@ -296,7 +295,6 @@ function drawChart(){
     ctx.beginPath(); ctx.moveTo(xa,ya); ctx.lineTo(xb,yb); ctx.stroke();
   }
 
-  // markers & hit areas
   hitAreas.kagi=[]; hitAreas.trade=[];
   for(let i=0;i<kagiData.length;i++){
     const p=kagiData[i]; if(p.x<viewStart || p.x>viewEnd) continue;
@@ -306,7 +304,6 @@ function drawChart(){
     hitAreas.kagi.push({x,y,r:10,index:i});
   }
 
-  // pair lines
   ctx.save(); ctx.setLineDash([6,4]); ctx.strokeStyle='#7f8c8d'; ctx.lineWidth=2;
   let open=null; trades.forEach(t=>{
     if(!open){open=t;return;}
@@ -314,7 +311,6 @@ function drawChart(){
     else open=t;
   }); ctx.restore();
 
-  // trade markers
   trades.forEach((t,i)=>{
     if(t.x<viewStart || t.x>viewEnd) return;
     const x=x2px(t.x), y=y2px(t.y); const size=10;
@@ -345,7 +341,7 @@ function canvasPoint(evt){ const r=el.kagiCanvas.getBoundingClientRect(); const 
 function pickNearest(x,y){ for(const a of hitAreas.trade){ const dx=x-a.x,dy=y-a.y; if(dx*dx+dy*dy<=a.r*a.r) return {type:'trade',index:a.index}; } for(const a of hitAreas.kagi){ const dx=x-a.x,dy=y-a.y; if(dx*dx+dy*dy<=a.r*a.r) return {type:'kagi',index:a.index}; } return null; }
 function onCanvasClick(e){ const {x,y}=canvasPoint(e); const h=pickNearest(x,y); if(!h) return; if(h.type==='kagi'){selectedIdx=h.index;selectedTradeIdx=null;} else {selectedTradeIdx=h.index;selectedIdx=null;} drawChart(); }
 
-/* ====== UI更新 ====== */
+/* ====== UI ====== */
 function updateTradeLog(){
   const box=el.tradeLog;
   if(!trades.length){ box.textContent='—'; el.plTotal.textContent=''; return; }
@@ -381,9 +377,11 @@ function updateTradeList(){
 }
 function updateLists(){ updatePriceList(); updateTradeList(); }
 
-/* ====== 操作（共通：変更時は onStateChanged()） ====== */
+/* ====== 変更フック ====== */
+const debouncedCloudSave = debounce(()=>{ saveToGist().catch(e=>{setBadge('保存エラー');console.error(e);}); }, 800);
 function onStateChanged(){ maybeAutoSave(); if(el.autoSync.checked) debouncedCloudSave(); }
 
+/* ====== 操作 ====== */
 function addPrice(){
   const v=el.priceInput.value.trim(); if(!v) return alert('価格を入力してください');
   const p=Math.round(+v); if(!isFinite(p)||p<=0) return alert('正しい価格を入力してください');
@@ -417,7 +415,6 @@ function exportJSON(){
 function importJSONFile(f){
   const r=new FileReader(); r.onload=()=>{ try{ applyState(JSON.parse(r.result)); log('JSONをインポートしました'); onStateChanged(); }catch{ alert('JSONの読み込みに失敗'); } }; r.readAsText(f);
 }
-/* CSV */
 function parseCSV(text){
   const lines=text.split(/\r?\n/).filter(l=>l.trim()!==''); if(!lines.length) return [];
   const head=lines[0].split(/,|\t/).map(s=>s.trim());
@@ -455,11 +452,9 @@ function updateViewRange(){
 function zoomOut(){ maxViewWidth=Math.min(maxViewWidth+5,50); updateViewRange(); drawChart(); maybeAutoSave(); }
 function zoomIn(){  maxViewWidth=Math.max(maxViewWidth-5,5); updateViewRange(); drawChart(); maybeAutoSave(); }
 function latest(){   el.chartRange.value=100; updateViewRange(); drawChart(); maybeAutoSave(); }
-
-/* 再描画 */
 function drawAll(){ kagiData = toPath( calcKagi(priceData, +el.reversalPercent.value) ); updateViewRange(); drawChart(); updateTradeLog(); updateKPI(); updateLists(); }
 
-/* ====== Gist 同期 ====== */
+/* ====== Gist 同期（ヘッダ切替対応） ====== */
 function loadSyncPrefs(){
   try{
     const token=localStorage.getItem(SYNC_KEYS.token)||''; const id=localStorage.getItem(SYNC_KEYS.gist)||''; const pub=localStorage.getItem(SYNC_KEYS.public)==='1';
@@ -469,40 +464,21 @@ function loadSyncPrefs(){
 }
 function saveToken(){ localStorage.setItem(SYNC_KEYS.token, el.gistToken.value.trim()); log('トークンを保存しました'); }
 function clearToken(){ localStorage.removeItem(SYNC_KEYS.token); el.gistToken.value=''; log('トークンを削除しました'); }
-// GitHub API呼び出し（PAT classic と fine-grained の両方に対応）
-async function gistRequest(path, method = 'GET', body = null, useTokenOptional = false) {
-  const headers = { 'Accept': 'application/vnd.github+json' };
 
-  const tokenInput = document.getElementById('gistToken');
-  const token = (tokenInput && tokenInput.value ? tokenInput.value.trim() : '');
-
-  // ← ここがポイント：トークンの種類によってヘッダを切替
+// ★ここが重要：PAT classic / fine-grained どちらでも通るようにする
+async function gistRequest(path, method='GET', body=null, useTokenOptional=false){
+  const headers={ 'Accept':'application/vnd.github+json' };
+  const token=(el.gistToken.value||'').trim();
   if (token) {
-    headers['Authorization'] =
-      (token.startsWith('github_pat_') ? 'Bearer ' : 'token ') + token;
+    headers['Authorization'] = (token.startsWith('github_pat_') ? 'Bearer ' : 'token ') + token;
   }
-
-  if (body) headers['Content-Type'] = 'application/json';
-
-  // 公開Gist読み込み時はトークン無しでもOK
-  if (useTokenOptional && !token) delete headers['Authorization'];
-
-  const res = await fetch(
-    'https://api.github.com' + path,
-    { method, headers, body: body ? JSON.stringify(body) : undefined }
-  );
-
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error('GitHub API ' + res.status + ' ' + txt);
-  }
-  return res.json();
   if(body) headers['Content-Type']='application/json';
-  if(useTokenOptional && !token) delete headers['Authorization']; // 公開Gist読み込み用
+  if(useTokenOptional && !token) delete headers['Authorization']; // 公開Gist読み込み可
   const res=await fetch('https://api.github.com'+path,{method,headers,body:body?JSON.stringify(body):undefined});
   if(!res.ok){ const t=await res.text(); throw new Error('GitHub API '+res.status+' '+t); }
   return res.json();
 }
+
 async function createGist(){
   const pub=!!el.gistPublic.checked;
   const s=getStateObj();
@@ -512,10 +488,9 @@ async function createGist(){
 }
 async function saveToGist(){
   const id=el.gistId.value.trim();
-  if(!id){ // 自動作成
+  if(!id){
     if(!el.gistToken.value.trim()) { setBadge('保存スキップ（トークンなし）'); return; }
-    await createGist();
-    return;
+    await createGist(); return;
   }
   const s=getStateObj();
   await gistRequest('/gists/'+id,'PATCH',{files:{'kagi_state.json':{content:JSON.stringify(s,null,2)}}});
@@ -538,7 +513,6 @@ function startPolling(){
   loadFromGist(true).catch(e=>{setBadge('読込エラー');console.error(e);});
 }
 function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
-const debouncedCloudSave = debounce(()=>{ saveToGist().catch(e=>{setBadge('保存エラー');console.error(e);}); }, 800);
 
 /* ====== イベント ====== */
 el.addPriceBtn.onclick=addPrice;
@@ -577,7 +551,6 @@ document.getElementById('zoomInBtn').onclick=()=>{zoomIn(); onStateChanged();};
 document.getElementById('latestBtn').onclick=()=>{latest(); onStateChanged();};
 el.shareLinkBtn.onclick=makeShareLink;
 
-// Gist UI
 el.saveTokenBtn.onclick=saveToken;
 el.clearTokenBtn.onclick=clearToken;
 el.createGistBtn.onclick=()=>{ if(!el.gistToken.value.trim()) return alert('トークンを入力してください'); createGist().then(()=>{ if(el.autoSync.checked) startPolling(); }).catch(e=>{alert('作成失敗: '+e.message); console.error(e);}); };
