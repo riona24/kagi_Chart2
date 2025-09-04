@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>日経225先物 手動入力カギ足（1ファイル版）</title>
+<title>日経225先物 手動入力カギ足（1ファイル・安定版）</title>
 
 <!-- Chart.js（CDN） -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans JP","Hiragino Kaku Gothic ProN","游ゴシック Medium","Yu Gothic Medium",sans-serif;background:linear-gradient(135deg,#1e3c72,#2a5298);min-height:100vh;padding:20px}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic Medium",sans-serif;background:linear-gradient(135deg,#1e3c72,#2a5298);min-height:100vh;padding:20px}
 .container{max-width:1200px;margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 12px 30px rgba(0,0,0,.12);overflow:hidden}
 .header{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:22px;text-align:center}
 .header h1{font-weight:500;font-size:20px}
@@ -44,7 +44,7 @@ input,select,button{font:inherit}
 </head>
 <body>
 <div class="container">
-  <div class="header"><h1>📈 日経225先物 手動入力カギ足（1ファイル版）</h1></div>
+  <div class="header"><h1>📈 日経225先物 手動入力カギ足（1ファイル・安定版）</h1></div>
   <div class="main">
 
     <!-- 左パネル -->
@@ -146,7 +146,11 @@ input,select,button{font:inherit}
 </div>
 
 <script>
-/* ===== アプリ（依存: Chart.jsのみ） ===== */
+/* ==== 安定化ポイント：すべて getElementById で参照 ==== */
+const el = {};
+function $(id){ return document.getElementById(id); }
+
+/* 共有変数 */
 let chart=null, priceData=[], kagiData=[], trades=[];
 let selectedIdx=null, selectedTradeIdx=null;
 let viewStart=0, viewEnd=0, maxViewWidth=20;
@@ -154,22 +158,38 @@ const COLOR={buy:'#2ecc71', sell:'#e74c3c', pair:'#7f8c8d55'};
 const SHAPE={buy:'triangle', sell:'rectRot'};
 const STORAGE_KEY='kagi_manual_storage_v1';
 
-/* 状態 */
-function getStateObject(){ return { priceData, trades, reversalPercent:+reversalPercent.value, maxViewWidth }; }
+/* ログ */
+function log(msg){
+  const box = el.dataLog;
+  const line = document.createElement('div');
+  line.textContent = new Date().toLocaleTimeString() + ' - ' + msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  if(box.children.length>120) box.children[0].remove();
+}
+
+/* 状態IO */
+function getStateObject(){ return { priceData, trades, reversalPercent:+el.reversalPercent.value, maxViewWidth }; }
 function applyStateObject(s){
   if(!s) return;
   priceData=Array.isArray(s.priceData)?s.priceData:[];
   trades=Array.isArray(s.trades)?s.trades:[];
-  if(typeof s.reversalPercent==='number') reversalPercent.value=s.reversalPercent;
+  if(typeof s.reversalPercent==='number') el.reversalPercent.value=s.reversalPercent;
   if(typeof s.maxViewWidth==='number') maxViewWidth=s.maxViewWidth;
   selectedIdx=null; selectedTradeIdx=null;
   drawChart(); updateLists(); maybeAutoSave();
 }
-function saveState(manual=false){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({savedAt:Date.now(), ...getStateObject()})); if(manual) log('ローカル保存しました'); }catch(e){ alert('保存失敗'); } }
-function restoreState(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return alert('保存データがありません'); applyStateObject(JSON.parse(raw)); log('保存から復元しました'); }catch(e){ alert('復元失敗'); } }
-function maybeAutoSave(){ if(document.getElementById('autosaveToggle').checked) saveState(false); }
+function saveState(manual=false){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({savedAt:Date.now(), ...getStateObject()})); if(manual) log('ローカル保存しました'); }
+  catch{ alert('保存失敗'); }
+}
+function restoreState(){
+  try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return alert('保存データがありません'); applyStateObject(JSON.parse(raw)); log('保存から復元しました'); }
+  catch{ alert('復元失敗'); }
+}
+function maybeAutoSave(){ if(el.autosaveToggle.checked) saveState(false); }
 
-/* 計算 */
+/* カギ足 */
 function calcKagi(list,rev){
   if(!list.length) return [];
   const k=[],f=list[0];let last=f.price,trend=1;
@@ -195,7 +215,7 @@ function toPath(d){
 
 /* Chart */
 function initChart(){
-  const ctx=document.getElementById('kagiChart').getContext('2d');
+  const ctx=el.kagiChart.getContext('2d');
   chart=new Chart(ctx,{type:'line',data:{datasets:[
     {label:'kagi',data:[],borderWidth:4,borderColor:'#3498db',backgroundColor:'transparent',pointBorderColor:'#2c3e50',pointBorderWidth:2,tension:0},
     {type:'scatter',label:'trade',data:[],showLine:false,pointRadius:12,pointBorderWidth:3},
@@ -207,7 +227,7 @@ function initChart(){
   chart.canvas.addEventListener('click', onChartClick);
 }
 function drawChart(){
-  kagiData=toPath( calcKagi(priceData,+reversalPercent.value) );
+  kagiData=toPath( calcKagi(priceData,+el.reversalPercent.value) );
   chart.data.datasets[0].data=kagiData.map(p=>({x:p.x,y:p.y}));
   chart.data.datasets[0].data.forEach((d,i)=>{ d.radius=kagiData[i].isHorizontal?7:10; d.hitRadius=15; d.hoverRadius=d.radius+3;
     d.backgroundColor=kagiData[i].isHorizontal?'#95a5a6':(kagiData[i].trend===1?COLOR.buy:COLOR.sell); d.borderWidth=2; d.borderColor='#2c3e50'; });
@@ -217,7 +237,7 @@ function drawChart(){
   chart.data.datasets[1].pointBorderColor='#2c3e50'; chart.data.datasets[1].pointRadius=12; chart.data.datasets[1].pointBorderWidth=3;
   chart.data.datasets[4].data=(selectedTradeIdx!==null && trades[selectedTradeIdx])?[{x:trades[selectedTradeIdx].x,y:trades[selectedTradeIdx].y}]:[];
   updatePairLines(); updateViewRange(); highlightSelected(false); chart.update('active');
-  updateTradeLog(); updateKPI(); updateRecent();
+  updateTradeLog(); updateKPI(); updateLists();
 }
 function updatePairLines(){
   const seg=[];let open=null;
@@ -227,12 +247,13 @@ function updatePairLines(){
 function updateViewRange(){
   if(!kagiData.length) return;
   const totalWidth=Math.max(...kagiData.map(p=>p.x))+1;
-  const slider=document.getElementById('chartRange'); const val=+slider.value;
+  const val=+el.chartRange.value;
   const width=Math.min(maxViewWidth,totalWidth);
   if(val===100){ viewEnd=totalWidth; viewStart=Math.max(0,viewEnd-width); }
   else{ const maxStart=Math.max(0,totalWidth-width); viewStart=Math.floor((val/100)*maxStart); viewEnd=Math.min(viewStart+width,totalWidth); }
   chart.options.scales.x.min=viewStart; chart.options.scales.x.max=viewEnd;
-  const info=document.getElementById('rangeInfo'); if(totalWidth<=maxViewWidth){ info.textContent='全データ表示'; slider.disabled=true; } else { info.textContent=`${viewStart+1}-${viewEnd}/${totalWidth}`; slider.disabled=false; }
+  if(totalWidth<=maxViewWidth){ el.rangeInfo.textContent='全データ表示'; el.chartRange.disabled=true; }
+  else{ el.rangeInfo.textContent=`${viewStart+1}-${viewEnd}/${totalWidth}`; el.chartRange.disabled=false; }
 }
 function highlightSelected(update=true){
   const ds=chart.data.datasets[3];
@@ -242,35 +263,32 @@ function highlightSelected(update=true){
 function onChartClick(evt){
   const els=chart.getElementsAtEventForMode(evt,'nearest',{intersect:false,axis:'xy'},true);
   if(!els.length) return;
-  const el=els[0];
-  if(el.datasetIndex===0){ selectedIdx=el.index; highlightSelected(); }
-  else if(el.datasetIndex===1){ selectedTradeIdx=el.index; drawChart(); }
+  const elx=els[0];
+  if(elx.datasetIndex===0){ selectedIdx=elx.index; highlightSelected(); }
+  else if(elx.datasetIndex===1){ selectedTradeIdx=elx.index; drawChart(); }
 }
 
-/* 取引・ログ・KPI・リスト */
+/* 表示・リスト */
 function updateTradeLog(){
-  const box=document.getElementById('tradeLog');
-  if(!trades.length){ box.textContent='—'; document.getElementById('plTotal').textContent=''; return; }
+  const box=el.tradeLog;
+  if(!trades.length){ box.textContent='—'; el.plTotal.textContent=''; return; }
   let html='',pl=0,open=null;
   trades.forEach((t,i)=>{ html+=`${i+1}. ${t.type.toUpperCase()} ¥${t.y.toLocaleString()} ${new Date(t.timestamp).toLocaleTimeString()}　`; 
     if(!open){open=t;} else if(open.type!==t.type){ pl+= open.type==='buy'? t.y-open.y : open.y-t.y; open=null; } else { open=t; }});
   box.innerHTML=html;
-  document.getElementById('plTotal').innerHTML=`累計損益: <span class="${pl>=0?'up':'down'}">${pl>=0?'+':''}${pl.toLocaleString()}</span>`;
+  el.plTotal.innerHTML=`累計損益: <span style="color:${pl>=0?'#27ae60':'#e74c3c'}">${pl>=0?'+':''}${pl.toLocaleString()}</span>`;
 }
 function updateKPI(){
-  document.getElementById('dataCount').textContent=priceData.length;
-  document.getElementById('kagiCount').textContent=kagiData.length;
+  el.dataCount.textContent=priceData.length;
+  el.kagiCount.textContent=kagiData.length;
   if(priceData.length){ const l=priceData[priceData.length-1];
-    document.getElementById('currentPrice').textContent='¥'+l.price.toLocaleString();
-    document.getElementById('lastUpdate').textContent=new Date(l.timestamp).toLocaleTimeString();
-  }else{ document.getElementById('currentPrice').textContent='---'; document.getElementById('lastUpdate').textContent='未入力'; }
-}
-function updateRecent(){
-  // 右ログ（簡略）
+    el.currentPrice.textContent='¥'+l.price.toLocaleString();
+    el.lastUpdate.textContent=new Date(l.timestamp).toLocaleTimeString();
+  }else{ el.currentPrice.textContent='---'; el.lastUpdate.textContent='未入力'; }
 }
 function updateLists(){ updatePriceList(); updateTradeList(); }
 function updatePriceList(){
-  const box=document.getElementById('priceList'); box.innerHTML='';
+  const box=el.priceList; box.innerHTML='';
   if(!priceData.length){ box.innerHTML='<div class="item" style="justify-content:center;color:#7f8c8d">履歴がありません</div>'; return; }
   priceData.forEach((d,i)=>{ const li=document.createElement('div'); li.className='item';
     li.innerHTML=`<div><b>#${i+1}</b> ¥${d.price.toLocaleString()}<br><span class="info">${new Date(d.timestamp).toLocaleString()}</span></div>
@@ -279,7 +297,7 @@ function updatePriceList(){
   });
 }
 function updateTradeList(){
-  const box=document.getElementById('tradeList'); box.innerHTML='';
+  const box=el.tradeList; box.innerHTML='';
   if(!trades.length){ box.innerHTML='<div class="item" style="justify-content:center;color:#7f8c8d">マークはありません</div>'; return; }
   trades.forEach((t,i)=>{ const li=document.createElement('div'); li.className='item';
     const active = i===selectedTradeIdx ? 'style="text-decoration:underline;font-weight:700"' : '';
@@ -291,12 +309,12 @@ function updateTradeList(){
 
 /* 操作 */
 function addPrice(){
-  const v=priceInput.value.trim(); if(!v) return alert('価格を入力してください');
+  const v=el.priceInput.value.trim(); if(!v) return alert('価格を入力してください');
   const p=Math.round(+v); if(!isFinite(p)||p<=0) return alert('正しい価格を入力してください');
-  const ts=datetimeInput.value ? new Date(datetimeInput.value).getTime() : Date.now();
+  const ts=el.datetimeInput.value ? new Date(el.datetimeInput.value).getTime() : Date.now();
   priceData.push({timestamp:ts,price:p});
-  const diff=priceData.length>1?p-priceData.at(-2).price:0; log(`価格追加: ¥${p.toLocaleString()} (${diff>0?'+':''}${diff})`,diff);
-  selectedIdx=null; drawChart(); rebindTrades(); updateLists(); maybeAutoSave(); priceInput.value='';
+  log(`価格追加: ¥${p.toLocaleString()}`);
+  selectedIdx=null; drawChart(); rebindTrades(); updateLists(); maybeAutoSave(); el.priceInput.value='';
 }
 function rebindTrades(){
   if(!kagiData.length || !trades.length) return;
@@ -311,14 +329,13 @@ function rebindTrades(){
 }
 function markSelected(){
   if(selectedIdx===null) return alert('まずチャート上の点をクリック');
-  const type=tradeType.value; const p=kagiData[selectedIdx];
+  const type=el.tradeType.value; const p=kagiData[selectedIdx];
   trades.push({x:p.x,y:p.y,type,timestamp:Date.now()}); selectedTradeIdx=trades.length-1;
   log(`${type==='buy'?'買い':'売り'}マーク: ¥${p.y.toLocaleString()}`); selectedIdx=null; drawChart(); updateTradeList(); maybeAutoSave();
 }
 function deleteSelectedTrade(){
   if(selectedTradeIdx===null) return alert('削除するマークを選択してください（チャートのマークをクリック）');
-  const r=trades.splice(selectedTradeIdx,1)[0]; log(`選択マーク削除: ${r.type} ¥${r.y.toLocaleString()}`);
-  selectedTradeIdx=null; drawChart(); updateTradeList(); maybeAutoSave();
+  const r=trades.splice(selectedTradeIdx,1)[0]; log(`選択マーク削除: ${r.type}`); selectedTradeIdx=null; drawChart(); updateTradeList(); maybeAutoSave();
 }
 function clearTrades(){ if(!trades.length) return; if(!confirm('全ての売買マークを削除しますか？')) return; trades=[]; selectedTradeIdx=null; drawChart(); updateTradeList(); maybeAutoSave(); }
 function clearAll(){
@@ -377,53 +394,64 @@ function importCSVText(text){
 }
 function importCSVFile(f){ const r=new FileReader(); r.onload=()=>importCSVText(r.result); r.readAsText(f); }
 
-/* イベント登録 */
-document.getElementById('addPriceBtn').onclick=addPrice;
-document.getElementById('priceInput').addEventListener('keypress',e=>{if(e.key==='Enter')addPrice();});
-document.getElementById('addTradeBtn').onclick=markSelected;
-document.getElementById('deleteSelectedTradeBtn').onclick=deleteSelectedTrade;
-document.getElementById('clearTradesBtn').onclick=clearTrades;
-document.getElementById('recalculateBtn').onclick=()=>{ if(priceData.length){ drawChart(); rebindTrades(); drawChart(); } };
-document.getElementById('reversalPercent').onchange=()=>{ if(priceData.length){ drawChart(); rebindTrades(); drawChart(); } maybeAutoSave(); };
-document.getElementById('sampleBtn').onclick=()=>{
-  priceData=[]; trades=[]; selectedIdx=null; selectedTradeIdx=null;
-  const p=[40000,40500,39500,40500,40000,41000,39000,42000,38000,43000,37000,44000,36000,45000,35000,46000,34000,47000,33000,48000,32000,47500,33500,46000,35000,44500,36500,43000,38000,41500];
-  const base=Date.now()-p.length*60000; p.forEach((v,i)=>priceData.push({timestamp:base+i*60000,price:v}));
-  drawChart(); updateLists(); log('サンプルデータ追加'); maybeAutoSave();
-};
-document.getElementById('clearBtn').onclick=clearAll;
-document.getElementById('downloadBtn').onclick=downloadCSV;
-document.getElementById('saveBtn').onclick=()=>saveState(true);
-document.getElementById('restoreBtn').onclick=restoreState;
-document.getElementById('exportJsonBtn').onclick=exportJSON;
-document.getElementById('importJsonBtn').onclick=()=>importFile.click();
-document.getElementById('importFile').addEventListener('change',e=>{const f=e.target.files?.[0]; if(f) importJSONFile(f);});
-document.getElementById('importCsvBtn').onclick=()=>importCsvFile.click();
-document.getElementById('importCsvFile').addEventListener('change',e=>{const f=e.target.files?.[0]; if(f) importCSVFile(f);});
-document.getElementById('priceList').addEventListener('click',e=>{
-  const btn=e.target.closest('button[data-idx]'); if(!btn) return;
-  const i=+btn.dataset.idx; const r=priceData.splice(i,1)[0]; log(`入力削除: ¥${r.price.toLocaleString()}`); drawChart(); rebindTrades(); updateLists(); maybeAutoSave();
-});
-document.getElementById('tradeList').addEventListener('click',e=>{
-  const btn=e.target.closest('button[data-tidx]'); if(!btn) return;
-  const i=+btn.dataset.tidx; const r=trades.splice(i,1)[0]; log(`マーク削除: ${r.type}`); if(selectedTradeIdx===i) selectedTradeIdx=null; else if(selectedTradeIdx>i) selectedTradeIdx--;
-  drawChart(); updateTradeList(); maybeAutoSave();
-});
-document.getElementById('chartRange').addEventListener('input',()=>{updateViewRange(); chart.update('active');});
-document.getElementById('zoomOutBtn').onclick=()=>{maxViewWidth=Math.min(maxViewWidth+5,50);updateViewRange();chart.update('active');maybeAutoSave();};
-document.getElementById('zoomInBtn').onclick=()=>{maxViewWidth=Math.max(maxViewWidth-5,5);updateViewRange();chart.update('active');maybeAutoSave();};
-document.getElementById('latestBtn').onclick=()=>{chartRange.value=100;updateViewRange();chart.update('active');maybeAutoSave();};
+/* イベント登録＆初期化 */
+window.addEventListener('DOMContentLoaded', () => {
+  // DOMキャッシュ
+  ['priceInput','datetimeInput','reversalPercent','tradeType','addPriceBtn','addTradeBtn','deleteSelectedTradeBtn','clearTradesBtn','recalculateBtn','sampleBtn','clearBtn','downloadBtn','saveBtn','restoreBtn','exportJsonBtn','importJsonBtn','importFile','importCsvBtn','importCsvFile','autosaveToggle','priceList','tradeList','kagiChart','chartRange','rangeInfo','dataLog','tradeLog','plTotal','dataCount','kagiCount','currentPrice','lastUpdate'].forEach(id=>el[id]=$id(id));
+  function $id(id){ return document.getElementById(id); }
 
-/* 補助 */
-function log(msg,diff){ const el=document.getElementById('dataLog'); const d=document.createElement('div'); d.innerHTML=(diff>0?'<span class="up">':'<span class="down">')+''+'</span>'+msg; el.appendChild(document.createElement('div')).textContent = new Date().toLocaleTimeString()+' - '+msg; el.scrollTop=el.scrollHeight; if(el.children.length>80) el.children[0].remove(); }
+  // イベント
+  el.addPriceBtn.onclick=addPrice;
+  el.priceInput.addEventListener('keypress',e=>{if(e.key==='Enter')addPrice();});
+  el.addTradeBtn.onclick=markSelected;
+  el.deleteSelectedTradeBtn.onclick=deleteSelectedTrade;
+  el.clearTradesBtn.onclick=clearTrades;
+  el.recalculateBtn.onclick=()=>{ if(priceData.length){ drawChart(); rebindTrades(); drawChart(); } };
+  el.reversalPercent.onchange=()=>{ if(priceData.length){ drawChart(); rebindTrades(); drawChart(); } maybeAutoSave(); };
+  el.sampleBtn.onclick=()=>{
+    priceData=[]; trades=[]; selectedIdx=null; selectedTradeIdx=null;
+    const p=[40000,40500,39500,40500,40000,41000,39000,42000,38000,43000,37000,44000,36000,45000,35000,46000,34000,47000,33000,48000,32000,47500,33500,46000,35000,44500,36500,43000,38000,41500];
+    const base=Date.now()-p.length*60000; p.forEach((v,i)=>priceData.push({timestamp:base+i*60000,price:v}));
+    drawChart(); updateLists(); log('サンプルデータ追加'); maybeAutoSave();
+  };
+  el.clearBtn.onclick=clearAll;
+  el.downloadBtn.onclick=downloadCSV;
+  el.saveBtn.onclick=()=>saveState(true);
+  el.restoreBtn.onclick=restoreState;
+  el.exportJsonBtn.onclick=exportJSON;
+  el.importJsonBtn.onclick=()=>el.importFile.click();
+  el.importFile.addEventListener('change',e=>{const f=e.target.files?.[0]; if(f) importJSONFile(f);});
+  el.importCsvBtn.onclick=()=>el.importCsvFile.click();
+  el.importCsvFile.addEventListener('change',e=>{const f=e.target.files?.[0]; if(f) importCSVFile(f);});
+  el.priceList.addEventListener('click',e=>{
+    const btn=e.target.closest('button[data-idx]'); if(!btn) return;
+    const i=+btn.dataset.idx; const r=priceData.splice(i,1)[0]; log(`入力削除: ¥${r.price.toLocaleString()}`); drawChart(); rebindTrades(); updateLists(); maybeAutoSave();
+  });
+  el.tradeList.addEventListener('click',e=>{
+    const btn=e.target.closest('button[data-tidx]'); if(!btn) return;
+    const i=+btn.dataset.tidx; const r=trades.splice(i,1)[0]; log(`マーク削除: ${r.type}`); if(selectedTradeIdx===i) selectedTradeIdx=null; else if(selectedTradeIdx>i) selectedTradeIdx--;
+    drawChart(); updateTradeList(); maybeAutoSave();
+  });
+  el.chartRange.addEventListener('input',()=>{updateViewRange(); chart.update('active');});
+  document.getElementById('zoomOutBtn').onclick=()=>{maxViewWidth=Math.min(maxViewWidth+5,50);updateViewRange();chart.update('active');maybeAutoSave();};
+  document.getElementById('zoomInBtn').onclick=()=>{maxViewWidth=Math.max(maxViewWidth-5,5);updateViewRange();chart.update('active');maybeAutoSave();};
+  document.getElementById('latestBtn').onclick=()=>{el.chartRange.value=100;updateViewRange();chart.update('active');maybeAutoSave();};
 
-/* 起動 */
-window.addEventListener('DOMContentLoaded',()=>{
+  // 初期値
+  const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); el.datetimeInput.value=now.toISOString().slice(0,16);
+
+  // チャート
   initChart();
-  const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); datetimeInput.value=now.toISOString().slice(0,16);
-  // 既存のローカル保存があれば読み込む
+
+  // 既存ローカル保存があれば復元
   try{ const raw=localStorage.getItem(STORAGE_KEY); if(raw){ applyStateObject(JSON.parse(raw)); log('保存データを読み込みました'); } }catch{}
+
+  log('初期化完了');
 });
+
+/* グローバルエラーログ -> 画面下に表示 */
+window.addEventListener('error',(e)=>{try{el.dataLog && log('⚠️ エラー: '+(e?.message||e.type));}catch{}});
+window.addEventListener('unhandledrejection',(e)=>{try{el.dataLog && log('⚠️ Promise: '+(e?.reason?.message||String(e.reason)));}catch{}});
 </script>
 </body>
 </html>
