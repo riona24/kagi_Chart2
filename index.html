@@ -469,13 +469,34 @@ function loadSyncPrefs(){
 }
 function saveToken(){ localStorage.setItem(SYNC_KEYS.token, el.gistToken.value.trim()); log('トークンを保存しました'); }
 function clearToken(){ localStorage.removeItem(SYNC_KEYS.token); el.gistToken.value=''; log('トークンを削除しました'); }
-async function gistRequest(path, method='GET', body=null, useTokenOptional=false){
-  const headers={ 'Accept':'application/vnd.github+json' };
-  const token=el.gistToken.value.trim();
+// GitHub API呼び出し（PAT classic と fine-grained の両方に対応）
+async function gistRequest(path, method = 'GET', body = null, useTokenOptional = false) {
+  const headers = { 'Accept': 'application/vnd.github+json' };
+
+  const tokenInput = document.getElementById('gistToken');
+  const token = (tokenInput && tokenInput.value ? tokenInput.value.trim() : '');
+
+  // ← ここがポイント：トークンの種類によってヘッダを切替
   if (token) {
-  headers['Authorization'] =
-    (token.startsWith('github_pat_') ? 'Bearer ' : 'token ') + token;
-}
+    headers['Authorization'] =
+      (token.startsWith('github_pat_') ? 'Bearer ' : 'token ') + token;
+  }
+
+  if (body) headers['Content-Type'] = 'application/json';
+
+  // 公開Gist読み込み時はトークン無しでもOK
+  if (useTokenOptional && !token) delete headers['Authorization'];
+
+  const res = await fetch(
+    'https://api.github.com' + path,
+    { method, headers, body: body ? JSON.stringify(body) : undefined }
+  );
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error('GitHub API ' + res.status + ' ' + txt);
+  }
+  return res.json();
   if(body) headers['Content-Type']='application/json';
   if(useTokenOptional && !token) delete headers['Authorization']; // 公開Gist読み込み用
   const res=await fetch('https://api.github.com'+path,{method,headers,body:body?JSON.stringify(body):undefined});
