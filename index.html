@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>日経225先物 手動入力カギ足（1ファイル版）</title>
+
+<!-- Chart.js（CDN） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans JP","Hiragino Kaku Gothic ProN","游ゴシック Medium","Yu Gothic Medium",sans-serif;background:linear-gradient(135deg,#1e3c72,#2a5298);min-height:100vh;padding:20px}
+.container{max-width:1200px;margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 12px 30px rgba(0,0,0,.12);overflow:hidden}
+.header{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;padding:22px;text-align:center}
+.header h1{font-weight:500;font-size:20px}
+.main{display:grid;grid-template-columns:360px 1fr}
+@media(max-width:980px){.main{grid-template-columns:1fr}}
+.left{background:#f8f9fa;border-right:1px solid #e9ecef;padding:16px}
+.right{padding:16px}
+h2{font-size:14px;color:#34495e;margin:18px 0 10px}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);padding:12px;margin-bottom:12px}
+label{display:block;font-size:12px;color:#2c3e50;margin-bottom:6px}
+input,select,button{font:inherit}
+.input{width:100%;padding:10px;border:2px solid #e1e8ed;border-radius:8px}
+.input:focus{outline:none;border-color:#3498db;box-shadow:0 0 0 3px rgba(52,152,219,.1)}
+.row{display:flex;gap:8px;align-items:end}
+.btn{padding:10px 14px;border:none;border-radius:8px;color:#fff;cursor:pointer}
+.btn-primary{background:#2980b9}.btn-green{background:#27ae60}.btn-red{background:#e74c3c}.btn-gray{background:#7f8c8d}.btn-amber{background:#f39c12}
+.small{padding:8px 10px;font-size:12px}
+.list{max-height:160px;overflow:auto;border:1px solid #e9ecef;border-radius:8px;background:#fff}
+.item{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid #f2f2f2}
+.item:last-child{border-bottom:none}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.kpi .box{background:#fff;border-left:4px solid #3498db;border-radius:10px;text-align:center;padding:10px;box-shadow:0 1px 6px rgba(0,0,0,.06)}
+.kpi .v{font-weight:700;color:#2c3e50}
+.kpi .l{font-size:12px;color:#7f8c8d}
+.log{background:#2c3e50;color:#ecf0f1;border-radius:8px;padding:10px;font:12px/1.6 ui-monospace,Consolas,monospace;max-height:140px;overflow:auto}
+.up{color:#27ae60}.down{color:#e74c3c}
+.toolbar{display:flex;gap:8px;align-items:center;background:#f8f9fa;border:1px solid #e9ecef;border-radius:8px;padding:8px;margin-bottom:10px}
+.range{flex:1}
+.info{font-size:12px;color:#7f8c8d}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header"><h1>📈 日経225先物 手動入力カギ足（1ファイル版）</h1></div>
+  <div class="main">
+
+    <!-- 左パネル -->
+    <div class="left">
+      <div class="card">
+        <h2>価格入力</h2>
+        <label>現在価格 (円)</label>
+        <div class="row">
+          <input id="priceInput" type="number" class="input" placeholder="例: 33500" inputmode="numeric" />
+          <button id="addPriceBtn" class="btn btn-green small">追加</button>
+        </div>
+        <label style="margin-top:8px">日時（オプション）</label>
+        <input id="datetimeInput" type="datetime-local" class="input" />
+      </div>
+
+      <div class="card">
+        <h2>カギ足パラメーター</h2>
+        <label>転換率 (%)</label>
+        <input id="reversalPercent" type="number" class="input" value="0.1" step="0.01" min="0.01" />
+        <div style="margin-top:8px"><button id="recalculateBtn" class="btn btn-amber small">🔄 再計算</button></div>
+      </div>
+
+      <div class="card">
+        <h2>売買記録</h2>
+        <label>取引タイプ</label>
+        <select id="tradeType" class="input">
+          <option value="buy">買い (BUY)</option>
+          <option value="sell">売り (SELL)</option>
+        </select>
+        <div class="row" style="margin-top:8px;flex-wrap:wrap">
+          <button id="addTradeBtn" class="btn btn-primary small">✅ マーク</button>
+          <button id="deleteSelectedTradeBtn" class="btn btn-red small">🗑 選択マーク削除</button>
+          <button id="clearTradesBtn" class="btn btn-gray small">🧹 全マーク削除</button>
+        </div>
+        <div id="tradeLog" class="info" style="margin-top:6px">—</div>
+        <div id="plTotal" style="margin-top:4px;font-weight:700"></div>
+        <div class="list" id="tradeList" style="margin-top:8px"><div class="item" style="justify-content:center;color:#7f8c8d">マークはありません</div></div>
+      </div>
+
+      <div class="card">
+        <h2>データ管理</h2>
+        <div class="row" style="flex-wrap:wrap">
+          <button id="downloadBtn" class="btn btn-gray small">💾 CSVダウンロード</button>
+          <button id="sampleBtn" class="btn btn-primary small">📊 サンプルデータ</button>
+          <button id="clearBtn" class="btn btn-red small">🗑️ 全クリア</button>
+        </div>
+        <div class="row" style="flex-wrap:wrap;margin-top:6px">
+          <button id="saveBtn" class="btn btn-green small">📎 ローカル保存</button>
+          <button id="restoreBtn" class="btn btn-gray small">↩️ 保存から復元</button>
+          <label class="info" style="display:flex;gap:6px;align-items:center">
+            <input type="checkbox" id="autosaveToggle" checked>自動保存
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📦 JSON / CSV 入出力</h2>
+        <div class="row" style="flex-wrap:wrap">
+          <button id="exportJsonBtn" class="btn btn-gray small">🧾 JSONエクスポート</button>
+          <button id="importJsonBtn" class="btn btn-primary small">📥 JSONインポート</button>
+          <input id="importFile" type="file" accept="application/json" style="display:none">
+          <button id="importCsvBtn" class="btn btn-primary small">📥 CSVインポート</button>
+          <input id="importCsvFile" type="file" accept=".csv,text/csv" style="display:none">
+        </div>
+        <div class="info" style="margin-top:6px">当アプリ形式（timestamp,datetime,price）や一般的な (date/datetime,price) も読めます。</div>
+      </div>
+
+      <div class="kpi">
+        <div class="box"><div class="v" id="lastUpdate">未入力</div><div class="l">最終入力</div></div>
+        <div class="box"><div class="v" id="dataCount">0</div><div class="l">価格データ数</div></div>
+        <div class="box"><div class="v" id="currentPrice">---</div><div class="l">最新価格</div></div>
+        <div class="box"><div class="v" id="kagiCount">0</div><div class="l">カギ線数</div></div>
+      </div>
+
+      <div class="card">
+        <h2>入力履歴</h2>
+        <div class="list" id="priceList"><div class="item" style="justify-content:center;color:#7f8c8d">履歴がありません</div></div>
+      </div>
+
+      <div class="card info">📌 転換率 0.1% は約 40 円幅 / サンプルで動作確認できます</div>
+    </div>
+
+    <!-- 右パネル -->
+    <div class="right">
+      <div class="toolbar">
+        <span class="info">表示範囲</span>
+        <input id="chartRange" class="range" type="range" min="0" max="100" value="100" step="1">
+        <span id="rangeInfo" class="info">全データ表示</span>
+        <button id="zoomOutBtn" class="btn btn-gray small">−</button>
+        <button id="zoomInBtn"  class="btn btn-gray small">＋</button>
+        <button id="latestBtn"  class="btn btn-gray small">最新</button>
+      </div>
+      <div style="background:#fff;border:1px solid #e9ecef;border-radius:12px;padding:10px">
+        <canvas id="kagiChart" height="380"></canvas>
+      </div>
+      <div class="log" id="dataLog" style="margin-top:10px"><div>システム起動 - 日経225先物手動入力システム開始</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== アプリ（依存: Chart.jsのみ） ===== */
+let chart=null, priceData=[], kagiData=[], trades=[];
+let selectedIdx=null, selectedTradeIdx=null;
+let viewStart=0, viewEnd=0, maxViewWidth=20;
+const COLOR={buy:'#2ecc71', sell:'#e74c3c', pair:'#7f8c8d55'};
+const SHAPE={buy:'triangle', sell:'rectRot'};
+const STORAGE_KEY='kagi_manual_storage_v1';
+
+/* 状態 */
+function getStateObject(){ return { priceData, trades, reversalPercent:+reversalPercent.value, maxViewWidth }; }
+function applyStateObject(s){
+  if(!s) return;
+  priceData=Array.isArray(s.priceData)?s.priceData:[];
+  trades=Array.isArray(s.trades)?s.trades:[];
+  if(typeof s.reversalPercent==='number') reversalPercent.value=s.reversalPercent;
+  if(typeof s.maxViewWidth==='number') maxViewWidth=s.maxViewWidth;
+  selectedIdx=null; selectedTradeIdx=null;
+  drawChart(); updateLists(); maybeAutoSave();
+}
+function saveState(manual=false){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({savedAt:Date.now(), ...getStateObject()})); if(manual) log('ローカル保存しました'); }catch(e){ alert('保存失敗'); } }
+function restoreState(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return alert('保存データがありません'); applyStateObject(JSON.parse(raw)); log('保存から復元しました'); }catch(e){ alert('復元失敗'); } }
+function maybeAutoSave(){ if(document.getElementById('autosaveToggle').checked) saveState(false); }
+
+/* 計算 */
+function calcKagi(list,rev){
+  if(!list.length) return [];
+  const k=[],f=list[0];let last=f.price,trend=1;
+  k.push({x:0,y:last,trend,timestamp:f.timestamp});
+  for(let i=1;i<list.length;i++){
+    const p=list[i].price,diff=p-last,chg=Math.abs(diff/last)*100;
+    if(chg<rev) continue;
+    const nt=diff>0?1:-1;
+    if(nt!==trend){trend=nt;last=p;k.push({x:k.length,y:p,trend,timestamp:list[i].timestamp});}
+    else if((trend===1&&p>last)||(trend===-1&&p<last)){last=p;k.push({x:k.length,y:p,trend,timestamp:list[i].timestamp});}
+  }
+  return k;
+}
+function toPath(d){
+  if(d.length<2) return d;
+  const r=[];let x=0;r.push({...d[0],x});
+  for(let i=1;i<d.length;i++){
+    if(d[i].trend!==d[i-1].trend){x++;r.push({x,y:d[i-1].y,isHorizontal:true,timestamp:d[i].timestamp});}
+    r.push({x,y:d[i].y,trend:d[i].trend,isVertical:true,timestamp:d[i].timestamp});
+  }
+  return r;
+}
+
+/* Chart */
+function initChart(){
+  const ctx=document.getElementById('kagiChart').getContext('2d');
+  chart=new Chart(ctx,{type:'line',data:{datasets:[
+    {label:'kagi',data:[],borderWidth:4,borderColor:'#3498db',backgroundColor:'transparent',pointBorderColor:'#2c3e50',pointBorderWidth:2,tension:0},
+    {type:'scatter',label:'trade',data:[],showLine:false,pointRadius:12,pointBorderWidth:3},
+    {type:'line',label:'pair',data:[],showLine:true,fill:false,borderDash:[6,4],borderColor:COLOR.pair,pointRadius:0},
+    {type:'scatter',label:'selected',data:[],showLine:false,pointRadius:12,pointStyle:'circle',pointBackgroundColor:'#f1c40f',pointBorderColor:'#2c3e50',pointBorderWidth:3},
+    {type:'scatter',label:'tradeSelected',data:[],showLine:false,pointRadius:14,pointStyle:'circle',pointBackgroundColor:'#f1c40f',pointBorderColor:'#2c3e50',pointBorderWidth:4}
+  ]},options:{responsive:true,interaction:{intersect:false,mode:'nearest'},plugins:{legend:{display:false}},
+    scales:{x:{type:'linear',min:0,max:maxViewWidth},y:{ticks:{callback:v=>'¥'+Math.round(v).toLocaleString()}}}} );
+  chart.canvas.addEventListener('click', onChartClick);
+}
+function drawChart(){
+  kagiData=toPath( calcKagi(priceData,+reversalPercent.value) );
+  chart.data.datasets[0].data=kagiData.map(p=>({x:p.x,y:p.y}));
+  chart.data.datasets[0].data.forEach((d,i)=>{ d.radius=kagiData[i].isHorizontal?7:10; d.hitRadius=15; d.hoverRadius=d.radius+3;
+    d.backgroundColor=kagiData[i].isHorizontal?'#95a5a6':(kagiData[i].trend===1?COLOR.buy:COLOR.sell); d.borderWidth=2; d.borderColor='#2c3e50'; });
+  chart.data.datasets[1].data=trades.map(t=>({x:t.x,y:t.y}));
+  chart.data.datasets[1].pointBackgroundColor=trades.map(t=>COLOR[t.type]);
+  chart.data.datasets[1].pointStyle=trades.map(t=>SHAPE[t.type]);
+  chart.data.datasets[1].pointBorderColor='#2c3e50'; chart.data.datasets[1].pointRadius=12; chart.data.datasets[1].pointBorderWidth=3;
+  chart.data.datasets[4].data=(selectedTradeIdx!==null && trades[selectedTradeIdx])?[{x:trades[selectedTradeIdx].x,y:trades[selectedTradeIdx].y}]:[];
+  updatePairLines(); updateViewRange(); highlightSelected(false); chart.update('active');
+  updateTradeLog(); updateKPI(); updateRecent();
+}
+function updatePairLines(){
+  const seg=[];let open=null;
+  trades.forEach(t=>{ if(!open){open=t;return;} if(open.type!==t.type){ seg.push({x:open.x,y:open.y},{x:t.x,y:t.y},{x:NaN,y:NaN}); open=null; } else { open=t; }});
+  chart.data.datasets[2].data=seg;
+}
+function updateViewRange(){
+  if(!kagiData.length) return;
+  const totalWidth=Math.max(...kagiData.map(p=>p.x))+1;
+  const slider=document.getElementById('chartRange'); const val=+slider.value;
+  const width=Math.min(maxViewWidth,totalWidth);
+  if(val===100){ viewEnd=totalWidth; viewStart=Math.max(0,viewEnd-width); }
+  else{ const maxStart=Math.max(0,totalWidth-width); viewStart=Math.floor((val/100)*maxStart); viewEnd=Math.min(viewStart+width,totalWidth); }
+  chart.options.scales.x.min=viewStart; chart.options.scales.x.max=viewEnd;
+  const info=document.getElementById('rangeInfo'); if(totalWidth<=maxViewWidth){ info.textContent='全データ表示'; slider.disabled=true; } else { info.textContent=`${viewStart+1}-${viewEnd}/${totalWidth}`; slider.disabled=false; }
+}
+function highlightSelected(update=true){
+  const ds=chart.data.datasets[3];
+  ds.data = selectedIdx!==null ? [{x:kagiData[selectedIdx].x,y:kagiData[selectedIdx].y}] : [];
+  if(update) chart.update('active');
+}
+function onChartClick(evt){
+  const els=chart.getElementsAtEventForMode(evt,'nearest',{intersect:false,axis:'xy'},true);
+  if(!els.length) return;
+  const el=els[0];
+  if(el.datasetIndex===0){ selectedIdx=el.index; highlightSelected(); }
+  else if(el.datasetIndex===1){ selectedTradeIdx=el.index; drawChart(); }
+}
+
+/* 取引・ログ・KPI・リスト */
+function updateTradeLog(){
+  const box=document.getElementById('tradeLog');
+  if(!trades.length){ box.textContent='—'; document.getElementById('plTotal').textContent=''; return; }
+  let html='',pl=0,open=null;
+  trades.forEach((t,i)=>{ html+=`${i+1}. ${t.type.toUpperCase()} ¥${t.y.toLocaleString()} ${new Date(t.timestamp).toLocaleTimeString()}　`; 
+    if(!open){open=t;} else if(open.type!==t.type){ pl+= open.type==='buy'? t.y-open.y : open.y-t.y; open=null; } else { open=t; }});
+  box.innerHTML=html;
+  document.getElementById('plTotal').innerHTML=`累計損益: <span class="${pl>=0?'up':'down'}">${pl>=0?'+':''}${pl.toLocaleString()}</span>`;
+}
+function updateKPI(){
+  document.getElementById('dataCount').textContent=priceData.length;
+  document.getElementById('kagiCount').textContent=kagiData.length;
+  if(priceData.length){ const l=priceData[priceData.length-1];
+    document.getElementById('currentPrice').textContent='¥'+l.price.toLocaleString();
+    document.getElementById('lastUpdate').textContent=new Date(l.timestamp).toLocaleTimeString();
+  }else{ document.getElementById('currentPrice').textContent='---'; document.getElementById('lastUpdate').textContent='未入力'; }
+}
+function updateRecent(){
+  // 右ログ（簡略）
+}
+function updateLists(){ updatePriceList(); updateTradeList(); }
+function updatePriceList(){
+  const box=document.getElementById('priceList'); box.innerHTML='';
+  if(!priceData.length){ box.innerHTML='<div class="item" style="justify-content:center;color:#7f8c8d">履歴がありません</div>'; return; }
+  priceData.forEach((d,i)=>{ const li=document.createElement('div'); li.className='item';
+    li.innerHTML=`<div><b>#${i+1}</b> ¥${d.price.toLocaleString()}<br><span class="info">${new Date(d.timestamp).toLocaleString()}</span></div>
+                  <button class="btn btn-red small" data-idx="${i}">削除</button>`;
+    box.appendChild(li);
+  });
+}
+function updateTradeList(){
+  const box=document.getElementById('tradeList'); box.innerHTML='';
+  if(!trades.length){ box.innerHTML='<div class="item" style="justify-content:center;color:#7f8c8d">マークはありません</div>'; return; }
+  trades.forEach((t,i)=>{ const li=document.createElement('div'); li.className='item';
+    const active = i===selectedTradeIdx ? 'style="text-decoration:underline;font-weight:700"' : '';
+    li.innerHTML=`<div ${active}><b>#${i+1}</b> ${t.type.toUpperCase()} ¥${t.y.toLocaleString()}<br><span class="info">${new Date(t.timestamp).toLocaleString()}</span></div>
+                  <button class="btn btn-red small" data-tidx="${i}">削除</button>`;
+    box.appendChild(li);
+  });
+}
+
+/* 操作 */
+function addPrice(){
+  const v=priceInput.value.trim(); if(!v) return alert('価格を入力してください');
+  const p=Math.round(+v); if(!isFinite(p)||p<=0) return alert('正しい価格を入力してください');
+  const ts=datetimeInput.value ? new Date(datetimeInput.value).getTime() : Date.now();
+  priceData.push({timestamp:ts,price:p});
+  const diff=priceData.length>1?p-priceData.at(-2).price:0; log(`価格追加: ¥${p.toLocaleString()} (${diff>0?'+':''}${diff})`,diff);
+  selectedIdx=null; drawChart(); rebindTrades(); updateLists(); maybeAutoSave(); priceInput.value='';
+}
+function rebindTrades(){
+  if(!kagiData.length || !trades.length) return;
+  trades.forEach(t=>{
+    let best=0,bd=1e18;
+    for(let i=0;i<kagiData.length;i++){
+      const dx=kagiData[i].x-t.x, dy=kagiData[i].y-t.y, d=dx*dx+dy*dy;
+      if(d<bd){bd=d;best=i;}
+    }
+    t.x=kagiData[best].x; t.y=kagiData[best].y;
+  });
+}
+function markSelected(){
+  if(selectedIdx===null) return alert('まずチャート上の点をクリック');
+  const type=tradeType.value; const p=kagiData[selectedIdx];
+  trades.push({x:p.x,y:p.y,type,timestamp:Date.now()}); selectedTradeIdx=trades.length-1;
+  log(`${type==='buy'?'買い':'売り'}マーク: ¥${p.y.toLocaleString()}`); selectedIdx=null; drawChart(); updateTradeList(); maybeAutoSave();
+}
+function deleteSelectedTrade(){
+  if(selectedTradeIdx===null) return alert('削除するマークを選択してください（チャートのマークをクリック）');
+  const r=trades.splice(selectedTradeIdx,1)[0]; log(`選択マーク削除: ${r.type} ¥${r.y.toLocaleString()}`);
+  selectedTradeIdx=null; drawChart(); updateTradeList(); maybeAutoSave();
+}
+function clearTrades(){ if(!trades.length) return; if(!confirm('全ての売買マークを削除しますか？')) return; trades=[]; selectedTradeIdx=null; drawChart(); updateTradeList(); maybeAutoSave(); }
+function clearAll(){
+  if(!priceData.length && !trades.length) return;
+  if(!confirm('全データを削除しますか？')) return;
+  priceData=[]; trades=[]; kagiData=[]; selectedIdx=null; selectedTradeIdx=null; drawChart(); updateLists(); log('全データをクリア'); maybeAutoSave();
+}
+function downloadCSV(){
+  if(!priceData.length) return alert('データがありません');
+  const csv='timestamp,datetime,price\n'+priceData.map(d=>`${d.timestamp},${new Date(d.timestamp).toLocaleString()},${d.price}`).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='kagi_'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(getStateObject())],{type:'application/json'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='kagi_state_'+new Date().toISOString().slice(0,10)+'.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+function importJSONFile(f){
+  const r=new FileReader(); r.onload=()=>{ try{ applyStateObject(JSON.parse(r.result)); log('JSONをインポートしました'); }catch{ alert('JSONの読み込みに失敗'); } }; r.readAsText(f);
+}
+
+/* CSVインポート */
+function parseCSV(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim()!==''); if(!lines.length) return [];
+  const head=lines[0].split(/,|\t/).map(s=>s.trim());
+  const hasHeader=head.some(h=>/timestamp|datetime|date|time|price|close|終値|価格/i.test(h));
+  const rows=hasHeader?lines.slice(1):lines;
+  let idx={timestamp:-1, datetime:-1, price:-1};
+  if(hasHeader){
+    head.forEach((h,i)=>{const L=h.toLowerCase();
+      if(L.includes('timestamp')) idx.timestamp=i;
+      else if(/(datetime|date|time|日時|日付)/i.test(h)) idx.datetime=i;
+      else if(/(price|close|終値|価格)/i.test(h)) idx.price=i;
+    });
+  }
+  const out=[]; const base=Date.now()-rows.length*60000;
+  rows.forEach((line,i)=>{ const c=line.split(/,|\t/);
+    let price=null;
+    if(idx.price>=0) price=Number(c[idx.price]);
+    if(price===null || Number.isNaN(price)) price=Number(c.find(x=>/^[+-]?\d+(\.\d+)?$/.test(x?.trim())));
+    if(Number.isNaN(price)) return;
+    price=Math.round(price);
+    let ts=null;
+    if(idx.timestamp>=0){ const t=Number(c[idx.timestamp]); if(!Number.isNaN(t)&&t>1e11) ts=t; }
+    if(!ts && idx.datetime>=0){ const d=new Date(c[idx.datetime]); if(!Number.isNaN(d.getTime())) ts=d.getTime(); }
+    if(!ts) ts=base+i*60000;
+    out.push({timestamp:ts,price});
+  });
+  return out;
+}
+function importCSVText(text){
+  const arr=parseCSV(text);
+  if(!arr.length) return alert('CSVを解析できませんでした');
+  priceData=arr; trades=[]; selectedIdx=null; selectedTradeIdx=null;
+  log(`CSVインポート: ${arr.length}件`); drawChart(); updateLists(); maybeAutoSave();
+}
+function importCSVFile(f){ const r=new FileReader(); r.onload=()=>importCSVText(r.result); r.readAsText(f); }
+
+/* イベント登録 */
+document.getElementById('addPriceBtn').onclick=addPrice;
+document.getElementById('priceInput').addEventListener('keypress',e=>{if(e.key==='Enter')addPrice();});
+document.getElementById('addTradeBtn').onclick=markSelected;
+document.getElementById('deleteSelectedTradeBtn').onclick=deleteSelectedTrade;
+document.getElementById('clearTradesBtn').onclick=clearTrades;
+document.getElementById('recalculateBtn').onclick=()=>{ if(priceData.length){ drawChart(); rebindTrades(); drawChart(); } };
+document.getElementById('reversalPercent').onchange=()=>{ if(priceData.length){ drawChart(); rebindTrades(); drawChart(); } maybeAutoSave(); };
+document.getElementById('sampleBtn').onclick=()=>{
+  priceData=[]; trades=[]; selectedIdx=null; selectedTradeIdx=null;
+  const p=[40000,40500,39500,40500,40000,41000,39000,42000,38000,43000,37000,44000,36000,45000,35000,46000,34000,47000,33000,48000,32000,47500,33500,46000,35000,44500,36500,43000,38000,41500];
+  const base=Date.now()-p.length*60000; p.forEach((v,i)=>priceData.push({timestamp:base+i*60000,price:v}));
+  drawChart(); updateLists(); log('サンプルデータ追加'); maybeAutoSave();
+};
+document.getElementById('clearBtn').onclick=clearAll;
+document.getElementById('downloadBtn').onclick=downloadCSV;
+document.getElementById('saveBtn').onclick=()=>saveState(true);
+document.getElementById('restoreBtn').onclick=restoreState;
+document.getElementById('exportJsonBtn').onclick=exportJSON;
+document.getElementById('importJsonBtn').onclick=()=>importFile.click();
+document.getElementById('importFile').addEventListener('change',e=>{const f=e.target.files?.[0]; if(f) importJSONFile(f);});
+document.getElementById('importCsvBtn').onclick=()=>importCsvFile.click();
+document.getElementById('importCsvFile').addEventListener('change',e=>{const f=e.target.files?.[0]; if(f) importCSVFile(f);});
+document.getElementById('priceList').addEventListener('click',e=>{
+  const btn=e.target.closest('button[data-idx]'); if(!btn) return;
+  const i=+btn.dataset.idx; const r=priceData.splice(i,1)[0]; log(`入力削除: ¥${r.price.toLocaleString()}`); drawChart(); rebindTrades(); updateLists(); maybeAutoSave();
+});
+document.getElementById('tradeList').addEventListener('click',e=>{
+  const btn=e.target.closest('button[data-tidx]'); if(!btn) return;
+  const i=+btn.dataset.tidx; const r=trades.splice(i,1)[0]; log(`マーク削除: ${r.type}`); if(selectedTradeIdx===i) selectedTradeIdx=null; else if(selectedTradeIdx>i) selectedTradeIdx--;
+  drawChart(); updateTradeList(); maybeAutoSave();
+});
+document.getElementById('chartRange').addEventListener('input',()=>{updateViewRange(); chart.update('active');});
+document.getElementById('zoomOutBtn').onclick=()=>{maxViewWidth=Math.min(maxViewWidth+5,50);updateViewRange();chart.update('active');maybeAutoSave();};
+document.getElementById('zoomInBtn').onclick=()=>{maxViewWidth=Math.max(maxViewWidth-5,5);updateViewRange();chart.update('active');maybeAutoSave();};
+document.getElementById('latestBtn').onclick=()=>{chartRange.value=100;updateViewRange();chart.update('active');maybeAutoSave();};
+
+/* 補助 */
+function log(msg,diff){ const el=document.getElementById('dataLog'); const d=document.createElement('div'); d.innerHTML=(diff>0?'<span class="up">':'<span class="down">')+''+'</span>'+msg; el.appendChild(document.createElement('div')).textContent = new Date().toLocaleTimeString()+' - '+msg; el.scrollTop=el.scrollHeight; if(el.children.length>80) el.children[0].remove(); }
+
+/* 起動 */
+window.addEventListener('DOMContentLoaded',()=>{
+  initChart();
+  const now=new Date(); now.setMinutes(now.getMinutes()-now.getTimezoneOffset()); datetimeInput.value=now.toISOString().slice(0,16);
+  // 既存のローカル保存があれば読み込む
+  try{ const raw=localStorage.getItem(STORAGE_KEY); if(raw){ applyStateObject(JSON.parse(raw)); log('保存データを読み込みました'); } }catch{}
+});
+</script>
+</body>
+</html>
